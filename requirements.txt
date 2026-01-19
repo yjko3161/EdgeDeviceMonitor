@@ -1,0 +1,5 @@
+flask
+ping3
+requests
+python-dotenv
+pymysql

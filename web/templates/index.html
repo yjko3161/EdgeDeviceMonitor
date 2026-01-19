@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EdgeDeviceMonitor</title>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --bg-color: #f4f4f9;
+            --text-color: #333;
+            --card-bg: #fff;
+            --success-color: #28a745;
+            --error-color: #dc3545;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        h1 {
+            text-align: center;
+            color: #444;
+            margin-bottom: 40px;
+            font-weight: 600;
+        }
+
+        /* Status Cards */
+        .status-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .status-card {
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #eee;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .status-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .status-header {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #555;
+            border-bottom: 1px solid #f0f0f0;
+            padding-bottom: 8px;
+            margin-bottom: 5px;
+        }
+
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status-label {
+            font-size: 0.9em;
+            color: #888;
+        }
+
+        .status-value {
+            font-weight: 600;
+        }
+
+        .status-ok {
+            color: var(--success-color);
+        }
+
+        .status-fail {
+            color: var(--error-color);
+        }
+
+        /* Tabs */
+        .tabs-container {
+            border-bottom: 2px solid #eee;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 1em;
+            color: #666;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:hover {
+            color: var(--primary-color);
+            background-color: #f8f9fa;
+        }
+
+        .tab-btn.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+        }
+
+        /* Logs Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 0.95em;
+        }
+
+        th,
+        td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            color: #555;
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background-color: #fafafa;
+        }
+
+        .refresh-btn {
+            float: right;
+            padding: 8px 16px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background 0.2s;
+        }
+
+        .refresh-btn:hover {
+            background: #0056b3;
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Edge Device Monitor</h1>
+
+        <!-- Status Cards Grid -->
+        <div id="statusContainer" class="status-container">
+            <div class="empty-state">Loading Status...</div>
+        </div>
+
+        <!-- Logs Section -->
+        <div class="header-row">
+            <h2 style="margin:0;">Device Logs</h2>
+            <button class="refresh-btn" onclick="fetchStatus()">Refresh</button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs-container" id="tabsContainer">
+            <button class="tab-btn active" onclick="setFilter('')">All View</button>
+            <!-- Dynamic Tabs will be inserted here -->
+        </div>
+
+        <table id="logsTable">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Device</th>
+                    <th>Ping</th>
+                    <th>HTTP</th>
+                    <th>Latency (Ping/HTTP)</th>
+                    <th>Error</th>
+                </tr>
+            </thead>
+            <tbody id="logsBody">
+                <!-- Logs will be inserted here -->
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        let currentFilter = '';
+
+        function setFilter(host) {
+            currentFilter = host;
+            updateTabs();
+            fetchStatus();
+        }
+
+        function updateTabs() {
+            const tabs = document.querySelectorAll('.tab-btn');
+            tabs.forEach(tab => {
+                // Determine if this tab matches the current filter
+                // We store the host value in a data attribute or check text
+                const tabHost = tab.getAttribute('data-host') || '';
+                if (tabHost === currentFilter) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+        }
+
+        async function fetchStatus() {
+            try {
+                let url = '/api/status';
+                if (currentFilter) {
+                    url += '?host=' + encodeURIComponent(currentFilter);
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                // Handle DB Disconnection
+                if (data.db_status === 'disconnected') {
+                    document.getElementById('statusContainer').innerHTML =
+                        `<div class="status-card" style="border-color:red"><span class="status-fail">DB Connection Error: ${data.error}</span></div>`;
+                    return;
+                }
+
+                // 1. Render Tabs (Idempotent)
+                renderTabs(data.devices);
+
+                // 2. Render Status Cards
+                renderCards(data.devices);
+
+                // 3. Render Logs
+                renderLogs(data.history);
+
+            } catch (error) {
+                console.error('Error fetching status:', error);
+            }
+        }
+
+        function renderTabs(devices) {
+            const container = document.getElementById('tabsContainer');
+            // Keep the "All View" button, recreate the rest
+            // Or simpler: just check if we need to add buttons
+
+            // Check if we have buttons for all devices
+            devices.forEach(device => {
+                if (!container.querySelector(`button[data-host="${device.host}"]`)) {
+                    const btn = document.createElement('button');
+                    btn.className = 'tab-btn';
+                    btn.textContent = device.host;
+                    btn.setAttribute('data-host', device.host);
+                    btn.onclick = () => setFilter(device.host);
+                    container.appendChild(btn);
+                }
+            });
+            updateTabs(); // Ensure active state is correct
+        }
+
+        function renderCards(devices) {
+            const container = document.getElementById('statusContainer');
+            container.innerHTML = '';
+
+            if (!devices || devices.length === 0) {
+                container.innerHTML = '<div class="empty-state">No devices configured (targets.json)</div>';
+                return;
+            }
+
+            devices.forEach(device => {
+                const card = document.createElement('div');
+                card.className = 'status-card';
+                // Highlight if selected
+                if (currentFilter && device.host === currentFilter) {
+                    card.style.borderColor = 'var(--primary-color)';
+                    card.style.boxShadow = '0 0 0 1px var(--primary-color)';
+                }
+
+                const isPingOk = device.status_ping === 1;
+                const isHttpOk = device.status_http === 1;
+
+                // Format check details
+                const pingClass = isPingOk ? 'status-ok' : 'status-fail';
+                const pingText = isPingOk ? 'ONLINE' : 'OFFLINE';
+
+                const httpClass = isHttpOk ? 'status-ok' : 'status-fail';
+                const httpText = isHttpOk ? `ONLINE (${device.http_status_code})` : 'OFFLINE';
+
+                const timeStr = device.timestamp === 'Pending' ? 'Pending' : device.timestamp.split(' ')[1];
+
+                card.innerHTML = `
+                    <div class="status-header">${device.host}</div>
+                    
+                    <div class="status-row">
+                        <span class="status-label">Ping</span>
+                        <span class="status-value ${pingClass}">${pingText}</span>
+                    </div>
+                    
+                    <div class="status-row">
+                        <span class="status-label">HTTP Service</span>
+                        <span class="status-value ${httpClass}">${httpText}</span>
+                    </div>
+                    
+                    <div class="status-row" style="margin-top:10px; padding-top:10px; border-top:1px dashed #eee">
+                        <span class="status-label">Last Checked</span>
+                        <span class="status-value" style="font-size:0.9em">${timeStr}</span>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function renderLogs(logs) {
+            const tbody = document.getElementById('logsBody');
+            tbody.innerHTML = '';
+
+            if (!logs || logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No logs found.</td></tr>';
+                return;
+            }
+
+            logs.forEach(log => {
+                const row = document.createElement('tr');
+
+                const pingText = log.status_ping
+                    ? '<span class="status-ok">OK</span>'
+                    : '<span class="status-fail">FAIL</span>';
+
+                const httpText = log.status_http
+                    ? `<span class="status-ok">OK (${log.http_status_code})</span>`
+                    : '<span class="status-fail">FAIL</span>';
+
+                const latencyText = `${log.ping_latency.toFixed(3)}s / ${log.http_latency.toFixed(3)}s`;
+
+                row.innerHTML = `
+                    <td>${log.timestamp}</td>
+                    <td><strong>${log.host}</strong></td>
+                    <td>${pingText}</td>
+                    <td>${httpText}</td>
+                    <td>${latencyText}</td>
+                    <td>${log.error_msg || ''}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Initial Load
+        fetchStatus();
+
+        // Auto Refresh every 10s
+        setInterval(fetchStatus, 10000);
+    </script>
+</body>
+
+</html>
